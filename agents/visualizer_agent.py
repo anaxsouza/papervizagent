@@ -158,7 +158,7 @@ class VisualizerAgent(BaseAgent):
                 gen_config_args["response_modalities"] = ["IMAGE"]
                 gen_config_args["image_config"] = types.ImageConfig(
                     aspect_ratio=aspect_ratio,
-                    image_size="1k",
+                    image_size=self.exp_config.image_size,
                 )
             
             if "gemini" in self.model_name:

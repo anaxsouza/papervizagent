@@ -174,7 +174,7 @@ class PolishAgent(BaseAgent):
                     response_modalities=["IMAGE"],
                     image_config=types.ImageConfig(
                         aspect_ratio=data.get("additional_info", {}).get("rounded_ratio", "16:9"),
-                        image_size="1k",
+                        image_size=self.exp_config.image_size,
                     ),
                 ),
                 max_attempts=5,

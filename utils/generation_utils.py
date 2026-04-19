@@ -43,38 +43,50 @@ if config_path.exists():
     with open(config_path, "r") as f:
         model_config = yaml.safe_load(f) or {}
 
+
 def get_config_val(section, key, env_var, default=""):
     val = os.getenv(env_var)
     if not val and section in model_config:
         val = model_config[section].get(key)
     return val or default
 
+
 # Initialize clients lazily or with robust defaults
-try:
-    import google.auth
-    creds, _ = google.auth.default()
-    if not hasattr(creds, "service_account_email"):
-        print(f"DEBUG: Running with credentials: {type(creds)}")
-    project_id = get_config_val("google_cloud", "project_id", "GOOGLE_CLOUD_PROJECT", "")
-    location = get_config_val("google_cloud", "location", "GOOGLE_CLOUD_LOCATION", "global")
-    print(f"DEBUG: Initialized Gemini Client with Project: {project_id}, Location: {location}")
-    
-    # Try Vertex AI first (preferred for Cloud Run)
-    gemini_client = genai.Client(vertexai=True, project=project_id, location=location)
-except ValueError:
-    # Fallback to API Key if Vertex fails (e.g. local dev without ADC)
-    api_key = get_config_val("api_keys", "google_api_key", "GOOGLE_API_KEY", "")
-    if api_key:
-        gemini_client = genai.Client(api_key=api_key)
-        print("Initialized Gemini Client with API Key")
-    else:
-        print("Warning: Could not initialize Gemini Client. Missing credentials.")
+project_id = get_config_val("google_cloud", "project_id", "GOOGLE_CLOUD_PROJECT", "")
+location = get_config_val("google_cloud", "location", "GOOGLE_CLOUD_LOCATION", "global")
+
+# Prefer API key for local/dev usage. Use Vertex AI only when no API key is provided.
+api_key = get_config_val("api_keys", "google_api_key", "GOOGLE_API_KEY", "")
+if api_key:
+    gemini_client = genai.Client(api_key=api_key)
+    print("Initialized Gemini Client with API Key")
+else:
+    try:
+        import google.auth
+
+        creds, _ = google.auth.default()
+        if not hasattr(creds, "service_account_email"):
+            print(f"DEBUG: Running with credentials: {type(creds)}")
+        print(
+            f"DEBUG: Initialized Gemini Client with Vertex AI Project: {project_id}, Location: {location}"
+        )
+        gemini_client = genai.Client(
+            vertexai=True, project=project_id, location=location
+        )
+    except Exception as e:
+        print(f"Warning: Could not initialize Gemini Client: {e}")
         gemini_client = None
 
-anthropic_project_id = get_config_val("anthropic", "project_id", "ANTHROPIC_PROJECT_ID", project_id)
-anthropic_region = get_config_val("anthropic", "region", "ANTHROPIC_REGION", "us-central1")
+anthropic_project_id = get_config_val(
+    "anthropic", "project_id", "ANTHROPIC_PROJECT_ID", project_id
+)
+anthropic_region = get_config_val(
+    "anthropic", "region", "ANTHROPIC_REGION", "us-central1"
+)
 try:
-    anthropic_client = AsyncAnthropicVertex(region=anthropic_region, project_id=anthropic_project_id)
+    anthropic_client = AsyncAnthropicVertex(
+        region=anthropic_region, project_id=anthropic_project_id
+    )
 except Exception as e:
     print(f"Warning: Could not initialize Anthropic Vertex Client: {e}")
     anthropic_client = None
@@ -84,11 +96,10 @@ try:
     if openai_api_key:
         openai_client = AsyncOpenAI(api_key=openai_api_key)
     else:
-        openai_client = AsyncOpenAI() # Will try to fall back to ENV implicitly
+        openai_client = AsyncOpenAI()  # Will try to fall back to ENV implicitly
 except Exception as e:
     print(f"Warning: Could not initialize OpenAI Client: {e}")
     openai_client = None
-
 
 
 def _convert_to_gemini_parts(contents: List[Dict[str, Any]]) -> List[types.Part]:
@@ -128,7 +139,7 @@ async def call_gemini_with_retry_async(
         try:
             # Use global client
             client = gemini_client
-            
+
             # Convert generic content list to Gemini's format right before the API call
             gemini_contents = _convert_to_gemini_parts(current_contents)
             response = await client.aio.models.generate_content(
@@ -136,10 +147,7 @@ async def call_gemini_with_retry_async(
             )
 
             # If we are using Image Generation models to generate images
-            if (
-                "nanoviz" in model_name
-                or "image" in model_name
-            ):
+            if "nanoviz" in model_name or "image" in model_name:
                 raw_response_list = []
                 if not response.candidates or not response.candidates[0].content.parts:
                     print(
@@ -171,10 +179,10 @@ async def call_gemini_with_retry_async(
 
         except Exception as e:
             context_msg = f" for {error_context}" if error_context else ""
-            
+
             # Exponential backoff (capped at 30s)
-            current_delay = min(retry_delay * (2 ** attempt), 30)
-            
+            current_delay = min(retry_delay * (2**attempt), 30)
+
             print(
                 f"Attempt {attempt + 1} for model {model_name} failed{context_msg}: {e}. Retrying in {current_delay} seconds..."
             )
@@ -188,6 +196,7 @@ async def call_gemini_with_retry_async(
     if len(result_list) < target_candidate_count:
         result_list.extend(["Error"] * (target_candidate_count - len(result_list)))
     return result_list
+
 
 def _convert_to_claude_format(contents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -208,14 +217,14 @@ def _convert_to_claude_format(contents: List[Dict[str, Any]]) -> List[Dict[str, 
 def _convert_to_openai_format(contents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Converts the generic content list (Claude format) to OpenAI's API format.
-    
+
     Claude format:
     [
         {"type": "text", "text": "some text"},
         {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "..."}},
         ...
     ]
-    
+
     OpenAI format:
     [
         {"type": "text", "text": "some text"},
@@ -234,10 +243,9 @@ def _convert_to_openai_format(contents: List[Dict[str, Any]]) -> List[Dict[str, 
                 data = source.get("data", "")
                 # OpenAI expects data URL format
                 data_url = f"data:{media_type};base64,{data}"
-                openai_contents.append({
-                    "type": "image_url",
-                    "image_url": {"url": data_url}
-                })
+                openai_contents.append(
+                    {"type": "image_url", "image_url": {"url": data_url}}
+                )
     return openai_contents
 
 
@@ -307,9 +315,7 @@ async def call_claude_with_retry_async(
                 model=model_name,
                 max_tokens=max_output_tokens,
                 temperature=temperature,
-                messages=[
-                    {"role": "user", "content": valid_claude_contents}
-                ],
+                messages=[{"role": "user", "content": valid_claude_contents}],
                 system=system_prompt,
             )
             for _ in range(remaining_candidates)
@@ -324,6 +330,7 @@ async def call_claude_with_retry_async(
                 response_text_list.append(res.content[0].text)
 
     return response_text_list
+
 
 async def call_openai_with_retry_async(
     model_name, contents, config, max_attempts=5, retry_delay=30, error_context=""
@@ -353,7 +360,7 @@ async def call_openai_with_retry_async(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": openai_contents}
+                    {"role": "user", "content": openai_contents},
                 ],
                 temperature=temperature,
                 max_completion_tokens=max_completion_tokens,
@@ -391,7 +398,7 @@ async def call_openai_with_retry_async(
                 model=model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": valid_openai_contents}
+                    {"role": "user", "content": valid_openai_contents},
                 ],
                 temperature=temperature,
                 max_completion_tokens=max_completion_tokens,
@@ -420,7 +427,7 @@ async def call_openai_image_generation_with_retry_async(
     quality = config.get("quality", "high")
     background = config.get("background", "opaque")
     output_format = config.get("output_format", "png")
-    
+
     # Base parameters for all models
     gen_params = {
         "model": model_name,
@@ -428,23 +435,27 @@ async def call_openai_image_generation_with_retry_async(
         "n": 1,
         "size": size,
     }
-    
+
     # Add GPT-Image specific parameters
-    gen_params.update({
-        "quality": quality,
-        "background": background,
-        "output_format": output_format,
-    })
+    gen_params.update(
+        {
+            "quality": quality,
+            "background": background,
+            "output_format": output_format,
+        }
+    )
 
     for attempt in range(max_attempts):
         try:
             response = await openai_client.images.generate(**gen_params)
-            
+
             # OpenAI images.generate returns a list of images in response.data
             if response.data and response.data[0].b64_json:
                 return [response.data[0].b64_json]
             else:
-                print(f"[Warning]: Failed to generate image via OpenAI, no data returned.")
+                print(
+                    f"[Warning]: Failed to generate image via OpenAI, no data returned."
+                )
                 if attempt < max_attempts - 1:
                     await asyncio.sleep(retry_delay)
                 continue

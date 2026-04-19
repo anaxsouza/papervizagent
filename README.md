@@ -123,6 +123,73 @@ python main.py \
 - `demo_planner_critic`: Demo mode (Planner → Visualizer → Critic) without evaluation
 - `demo_full`: Demo mode (full pipeline) without evaluation
 
+### Headless CLI: `generate.py` (recommended for batch thesis figures)
+
+The project also includes a dedicated headless entrypoint (`generate.py`) for deterministic, resume-safe generation and refinement workflows.
+
+#### Core behavior (defaults)
+- **Resolution**: `4K`
+- **Candidates**: `1`
+- **Concurrency**: `1` (sequential)
+- **Max figures per run**: `0` (no limit)
+- **Resume-safe output**: if `output_dir/<filename>.png` already exists, that figure is skipped automatically.
+- **Immediate save**: each image is written to disk as soon as generation finishes.
+
+#### Generate all pending SENTINEL figures (recommended)
+```bash
+.venv/bin/python generate.py generate \
+  -i data/sentinel_figures.json \
+  -o results/thesis_4k \
+  --mode dev_full \
+  --task diagram \
+  --critic_rounds 10 \
+  --retrieval none \
+  --aspect_ratio 16:9
+```
+
+Run the same command again to continue from where it stopped. Already generated files in `results/thesis_4k` are skipped.
+
+#### Generate a single specific figure
+```bash
+.venv/bin/python generate.py generate \
+  -i data/sentinel_figures.json \
+  --figure fig9_two_pillar_design \
+  -o results/thesis_4k \
+  --critic_rounds 10
+```
+
+#### Process only the next N pending figures
+```bash
+.venv/bin/python generate.py generate \
+  -i data/sentinel_figures.json \
+  -o results/thesis_4k \
+  --max_figures 3
+```
+
+#### Generate from direct text (without JSON)
+```bash
+.venv/bin/python generate.py generate \
+  --content "Your method description text" \
+  --caption "Figure caption" \
+  -o results/cli_generate
+```
+
+#### Refine an existing image with user prompt
+```bash
+.venv/bin/python generate.py refine \
+  --image results/thesis_4k/fig9_two_pillar_design.png \
+  --prompt "Increase label readability and improve contrast" \
+  -o results/thesis_4k
+```
+
+#### Useful generate options
+- `--resolution {1K,2K,4K}`: image resolution (default `4K`)
+- `--temperature FLOAT`: sampling temperature for planning/prompt generation
+- `--critic_rounds INT`: critic iterations (default `3`)
+- `--figure NAME`: filter by filename/caption (repeatable)
+- `--max_figures INT`: cap pending figures in current run (`0` = all pending)
+- `--concurrency INT`: parallel jobs (`1` recommended for stability)
+
 ### Visualization Tools
 
 View pipeline evolution and intermediate results:

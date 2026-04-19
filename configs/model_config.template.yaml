@@ -17,8 +17,8 @@
 
 # Default Models
 defaults:
-  model_name: "" # e.g., "gemini-3-pro-preview"
-  image_model_name: "" # e.g., "gemini-3-pro-image-preview"
+  model_name: "gemini-2.5-pro" # text/planning model
+  image_model_name: "gemini-3.1-flash-image-preview" # image generation model
 
 # Google Cloud / Vertex AI settings
 google_cloud:
@@ -27,9 +27,9 @@ google_cloud:
   
 # API Keys (alternatives to Application Default Credentials)
 api_keys:
-  google_api_key: ""
-  openai_api_key: ""
-  anthropic_api_key: ""
+  google_api_key: "" # never commit real keys
+  openai_api_key: "" # never commit real keys
+  anthropic_api_key: "" # never commit real keys
   
 # Anthropic Vertex Settings (if you want to use Anthropic via Vertex)
 anthropic:

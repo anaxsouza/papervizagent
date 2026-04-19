@@ -36,6 +36,7 @@ class ExpConfig:
     max_critic_rounds: int = 3
     model_name: str = ""
     image_model_name: str = ""
+    image_size: str = "4K"
     work_dir: Path = Path(__file__).parent.parent
 
     timestamp: str | None = None
